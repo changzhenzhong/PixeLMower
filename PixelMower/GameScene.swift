@@ -1,7 +1,7 @@
 import SpriteKit
 import AVFoundation
 
-// MARK: - GameState（唯一定义）
+// MARK: - GameState
 class GameState: ObservableObject {
     @Published var coins: Int = 0
     @Published var workerCount: Int = 1
@@ -107,13 +107,13 @@ class LegoWorker: SKNode {
     }
 }
 
-// MARK: - 游戏场景（极简）
+// MARK: - 游戏场景
 class GameScene: SKScene {
     weak var gameState: GameState!
     
     private var buildingNode: SKNode!
     private var brickPile: SKNode!
-    private var dropPoint: SKNode!  // 只用一个放置点简化
+    private var dropPoint: SKShapeNode!  // 改为 SKShapeNode
     private var workers: [LegoWorker] = []
     private var brickCount: Int = 0
     
@@ -133,7 +133,7 @@ class GameScene: SKScene {
         brickShape.strokeColor = .black
         brickPile.addChild(brickShape)
         
-        // 放置点（在建筑中心上方）
+        // 放置点（在建筑中心上方） - 使用 SKShapeNode
         dropPoint = SKShapeNode(circleOfRadius: 10)
         dropPoint.fillColor = .green
         dropPoint.strokeColor = .black
@@ -176,10 +176,8 @@ class GameScene: SKScene {
     }
     
     func switchToBuilding(_ index: Int) {
-        // 简单重置进度
         gameState.switchToBuilding(index: index)
         brickCount = 0
-        // 清除旧建筑外观，新建一个不同颜色的方块
         buildingNode.children.forEach { $0.removeFromParent() }
         let base = SKShapeNode(rectOf: CGSize(width: 80, height: 80))
         base.fillColor = index == 0 ? .brown : (index == 1 ? .yellow : .blue)
@@ -209,7 +207,6 @@ class GameScene: SKScene {
                 worker.isCarryingBrick = false
                 gameState.coins += gameState.currentBonus
                 AudioManager.playCoin()
-                // 增加建筑砖块
                 addBrickToBuilding()
             } else {
                 worker.isCarryingBrick = true
@@ -224,7 +221,6 @@ class GameScene: SKScene {
     }
     
     private func addBrickToBuilding() {
-        // 每次放砖添加一个小方块到建筑上
         let brick = SKShapeNode(rectOf: CGSize(width: 8, height: 8))
         brick.fillColor = .orange
         brick.strokeColor = .black
