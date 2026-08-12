@@ -6,15 +6,29 @@ struct ContentView: View {
     @StateObject private var gameState = GameState()
     @State private var showUpgradePanel = false
     @State private var upgradeOptions: [UpgradeOption] = []
+    @State private var gameScene: GameScene?
 
     var body: some View {
         ZStack {
-            SpriteView(scene: createScene())
-                .ignoresSafeArea()
-                .onAppear { setupGameCallbacks() }
+            if let gameScene = gameScene {
+                SpriteView(scene: gameScene)
+                    .ignoresSafeArea()
+                    .onAppear {
+                        setupGameCallbacks()
+                    }
+            } else {
+                Color.black
+                    .ignoresSafeArea()
+                    .onAppear {
+                        let scene = createScene()
+                        gameScene = scene
+                    }
+            }
 
+            // HUD 覆盖层
             VStack {
                 HStack {
+                    // 等级和经验条
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Lv.\(gameState.level)")
                             .font(.system(size: 20, weight: .bold, design: .monospaced))
@@ -32,24 +46,37 @@ struct ContentView: View {
                         .frame(height: 6)
                     }
                     .frame(width: 120)
+
                     Spacer()
+
+                    // 血量显示
+                    Text("❤️ \(Int(gameState.playerHP))")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(.red)
+
+                    // 击杀数
                     Text("⚔️\(gameState.killCount)")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(.orange)
                 }
-                .padding(.horizontal, 16).padding(.top, 8)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
                 Spacer()
             }
 
+            // 升级面板
             if showUpgradePanel {
                 upgradePanelView
+                    .onAppear {
+                        gameScene?.pauseGame()
+                    }
             }
         }
     }
 
     private func createScene() -> GameScene {
-        let scene = GameScene()
-        scene.size = UIScreen.main.bounds.size
+        let scene = GameScene(size: UIScreen.main.bounds.size)
         scene.scaleMode = .resizeFill
         scene.gameState = gameState
         return scene
@@ -59,6 +86,12 @@ struct ContentView: View {
         gameState.onLevelUp = { options in
             upgradeOptions = options
             withAnimation(.spring()) { showUpgradePanel = true }
+        }
+        gameState.onPlayerDeath = {
+            // 死亡处理：简单重启
+            gameState.reset()
+            gameScene?.removeAllChildren()
+            gameScene?.didMove(to: gameScene!.view!)
         }
     }
 
@@ -71,6 +104,7 @@ struct ContentView: View {
                 Button(action: {
                     gameState.applyUpgrade(option)
                     withAnimation(.spring()) { showUpgradePanel = false }
+                    gameScene?.resumeGame()
                 }) {
                     HStack {
                         Text(option.icon).font(.title2)
