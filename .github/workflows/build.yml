@@ -13,25 +13,33 @@ jobs:
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
 
+      - name: Show file structure
+        run: |
+          echo "=== 当前目录文件 ==="
+          ls -la
+          echo "=== PixelMower 文件夹内容 ==="
+          ls -la PixelMower || echo "PixelMower 文件夹不存在"
+          echo "=== project.yml 内容 ==="
+          cat project.yml || echo "project.yml 不存在"
+
       - name: Install XcodeGen
         run: |
-          curl -LO https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
+          echo "=== 下载 XcodeGen ==="
+          curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
+          echo "=== 下载完成，开始解压 ==="
           unzip -o xcodegen.zip
+          echo "=== 解压完成，设置权限 ==="
           chmod +x bin/xcodegen
-          sudo mkdir -p /usr/local/bin
           sudo cp bin/xcodegen /usr/local/bin/
+          echo "=== XcodeGen 版本 ==="
           xcodegen --version
 
       - name: Generate Xcode project
         run: |
-          echo "=== 文件列表 ==="
-          ls -la
-          echo "--- PixelMower 文件夹内容 ---"
-          ls -la PixelMower
-          echo "--- 生成 Xcode 项目 ---"
+          echo "=== 开始生成 Xcode 项目 ==="
           xcodegen generate
-          echo "--- 检查项目生成结果 ---"
-          ls -la PixelMower.xcodeproj
+          echo "=== 生成完成，检查项目文件 ==="
+          ls -la PixelMower.xcodeproj || echo "❌ 项目文件没有生成！"
 
       - name: Build archive (unsigned)
         run: |
@@ -47,12 +55,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
           echo "=== 编译结束 ==="
 
-      - name: Upload build log
+      - name: Upload build log (if exists)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
+          if-no-files-found: ignore
 
       - name: Create unsigned IPA
         if: success()
