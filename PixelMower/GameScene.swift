@@ -7,7 +7,11 @@ class GameState: ObservableObject {
     @Published var level = 1
     @Published var expProgress: Double = 0
     @Published var killCount = 0
+    @Published var playerHP: CGFloat = 100
+    @Published var maxPlayerHP: CGFloat = 100
     var onLevelUp: (([UpgradeOption]) -> Void)? = nil
+    var onPlayerDamaged: (() -> Void)? = nil
+    var onPlayerDeath: (() -> Void)? = nil
 
     // 玩家属性（增量成长）
     var attackDamage: CGFloat = 25
@@ -18,8 +22,7 @@ class GameState: ObservableObject {
     var expMultiplier: CGFloat = 1.0
     var critChance: Double = 0.05
     var critMultiplier: CGFloat = 2.0
-    var maxHP: CGFloat = 100
-    var currentHP: CGFloat = 100
+    var invincibleDuration: TimeInterval = 0.5
 
     private var expToNext: CGFloat = 50
     private var totalExp: CGFloat = 0
@@ -53,9 +56,39 @@ class GameState: ObservableObject {
         case "blades": bladeCount += 1
         case "exp": expMultiplier *= 1.25
         case "crit": critChance = min(critChance + 0.06, 0.5)
-        case "hp": maxHP *= 1.3; currentHP = maxHP
+        case "hp": maxPlayerHP *= 1.3; playerHP = maxPlayerHP
         default: break
         }
+    }
+
+    func takeDamage(_ amount: CGFloat) {
+        playerHP = max(0, playerHP - amount)
+        onPlayerDamaged?()
+        if playerHP <= 0 {
+            onPlayerDeath?()
+        }
+    }
+
+    func heal(_ amount: CGFloat) {
+        playerHP = min(maxPlayerHP, playerHP + amount)
+    }
+
+    func reset() {
+        level = 1
+        expProgress = 0
+        killCount = 0
+        playerHP = maxPlayerHP
+        attackDamage = 25
+        attackSpeed = 2.0
+        attackRange = 60
+        moveSpeed = 180
+        bladeCount = 2
+        expMultiplier = 1.0
+        critChance = 0.05
+        critMultiplier = 2.0
+        totalExp = 0
+        expToNext = 50
+        upgradeLevels = [:]
     }
 }
 
@@ -63,10 +96,6 @@ class GameState: ObservableObject {
 class GameScene: SKScene {
     weak var gameState: GameState!
     private var player: SKSpriteNode!
-    private var joystickBase: SKShapeNode!
-    private var joystickKnob: SKShapeNode!
-    private var moveDirection = CGVector.zero
-    private var isMoving = false
     private var blades: [SKSpriteNode] = []
     private var bladeAngle: CGFloat = 0
     private var lastUpdateTime: TimeInterval = 0
@@ -74,6 +103,13 @@ class GameScene: SKScene {
     private var spawnInterval: TimeInterval = 0.8
     private var gameTime: TimeInterval = 0
     private var cameraNode: SKCameraNode!
+    private var isGamePaused = false
+
+    // 动态摇杆
+    private var touchStartPosition: CGPoint?
+    private var moveDirection = CGVector.zero
+    private var isMoving = false
+    private var lastDamageTime: TimeInterval = 0
 
     override func didMove(to view: SKView) {
         backgroundColor = SKColor(red: 0.08, green: 0.08, blue: 0.15, alpha: 1.0)
@@ -88,11 +124,21 @@ class GameScene: SKScene {
         player.position = .zero
         addChild(player)
 
-        setupJoystick()
         updateBlades()
 
         physicsBody = SKPhysicsBody(edgeLoopFrom: frame)
         physicsBody?.friction = 0
+
+        lastDamageTime = 0
+    }
+
+    func pauseGame() {
+        isGamePaused = true
+    }
+
+    func resumeGame() {
+        isGamePaused = false
+        lastUpdateTime = 0
     }
 
     private func createPixelBackground() {
@@ -127,25 +173,6 @@ class GameScene: SKScene {
         node.physicsBody?.contactTestBitMask = 0x4
         node.physicsBody?.collisionBitMask = 0
         return node
-    }
-
-    private func setupJoystick() {
-        let baseRadius: CGFloat = 50
-        joystickBase = SKShapeNode(circleOfRadius: baseRadius)
-        joystickBase.fillColor = SKColor(white: 1.0, alpha: 0.1)
-        joystickBase.strokeColor = SKColor(white: 1.0, alpha: 0.3)
-        joystickBase.lineWidth = 2
-        joystickBase.zPosition = 100
-        joystickBase.position = CGPoint(x: -size.width/2 + 80, y: -size.height/2 + 100)
-        cameraNode.addChild(joystickBase)
-
-        joystickKnob = SKShapeNode(circleOfRadius: 22)
-        joystickKnob.fillColor = SKColor(white: 1.0, alpha: 0.5)
-        joystickKnob.strokeColor = .white
-        joystickKnob.lineWidth = 2
-        joystickKnob.zPosition = 101
-        joystickKnob.position = joystickBase.position
-        cameraNode.addChild(joystickKnob)
     }
 
     private func updateBlades() {
@@ -234,6 +261,10 @@ class GameScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        if isGamePaused {
+            lastUpdateTime = 0
+            return
+        }
         if lastUpdateTime == 0 { lastUpdateTime = currentTime; return }
         let dt = currentTime - lastUpdateTime
         lastUpdateTime = currentTime
@@ -246,8 +277,10 @@ class GameScene: SKScene {
             let dy = moveDirection.dy * speed * CGFloat(dt)
             player.position.x += dx
             player.position.y += dy
-            player.position.x = max(-size.width/2 + 30, min(size.width/2 - 30, player.position.x))
-            player.position.y = max(-size.height/2 + 30, min(size.height/2 - 30, player.position.y))
+            let halfW = size.width / 2 - 30
+            let halfH = size.height / 2 - 30
+            player.position.x = max(-halfW, min(halfW, player.position.x))
+            player.position.y = max(-halfH, min(halfH, player.position.y))
         }
 
         // 旋转剑
@@ -273,7 +306,7 @@ class GameScene: SKScene {
             }
         }
 
-        // 敌人AI
+        // 敌人AI + 碰撞伤害
         for node in children where node.name == "enemy" {
             guard let data = node.userData,
                   let speed = data["speed"] as? CGFloat else { continue }
@@ -283,6 +316,13 @@ class GameScene: SKScene {
             if dist > 1 {
                 node.position.x += (dx / dist) * speed * CGFloat(dt)
                 node.position.y += (dy / dist) * speed * CGFloat(dt)
+            }
+
+            // 敌人碰到玩家造成伤害
+            if dist < 35 && currentTime - lastDamageTime > gameState.invincibleDuration {
+                gameState.takeDamage(15)
+                lastDamageTime = currentTime
+                spawnPixelParticles(at: player.position, color: .orange)
             }
         }
 
@@ -315,8 +355,9 @@ class GameScene: SKScene {
         // 经验球收集
         for orb in children where orb.name == "expOrb" {
             let dist = hypot(orb.position.x - player.position.x, orb.position.y - player.position.y)
-            if dist < 25 {
+            if dist < 30 {
                 gameState.addExperience(10)
+                gameState.heal(2)
                 orb.removeFromParent()
             }
         }
@@ -334,46 +375,45 @@ class GameScene: SKScene {
         }
     }
 
-    // MARK: - 触摸处理
+    // MARK: - 动态摇杆触摸处理
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
-        let location = touch.location(in: cameraNode)
-        let dist = hypot(location.x - joystickBase.position.x, location.y - joystickBase.position.y)
-        if dist < 80 {
-            isMoving = true
-            updateJoystickKnob(touchLocation: location)
-        }
+        let location = touch.location(in: self)
+        touchStartPosition = location
+        isMoving = true
+        moveDirection = .zero
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard isMoving, let touch = touches.first else { return }
-        let location = touch.location(in: cameraNode)
-        updateJoystickKnob(touchLocation: location)
+        guard isMoving, let touch = touches.first, let start = touchStartPosition else { return }
+        let location = touch.location(in: self)
+        let dx = location.x - start.x
+        let dy = location.y - start.y
+        let dist = hypot(dx, dy)
+        let maxDist: CGFloat = 50
+        if dist > 5 {
+            let clampedDx = dx / maxDist
+            let clampedDy = dy / maxDist
+            let mag = hypot(clampedDx, clampedDy)
+            if mag > 1 {
+                moveDirection = CGVector(dx: clampedDx/mag, dy: clampedDy/mag)
+            } else {
+                moveDirection = CGVector(dx: clampedDx, dy: clampedDy)
+            }
+        } else {
+            moveDirection = .zero
+        }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         isMoving = false
         moveDirection = .zero
-        let resetAction = SKAction.move(to: joystickBase.position, duration: 0.15)
-        resetAction.timingMode = .easeOut
-        joystickKnob.run(resetAction)
+        touchStartPosition = nil
     }
 
-    private func updateJoystickKnob(touchLocation: CGPoint) {
-        let basePos = joystickBase.position
-        let dx = touchLocation.x - basePos.x
-        let dy = touchLocation.y - basePos.y
-        let dist = hypot(dx, dy)
-        let maxDist: CGFloat = 45
-        if dist > maxDist {
-            joystickKnob.position = CGPoint(x: basePos.x + dx/dist*maxDist, y: basePos.y + dy/dist*maxDist)
-        } else {
-            joystickKnob.position = touchLocation
-        }
-        moveDirection = CGVector(dx: dx / maxDist, dy: dy / maxDist)
-        let mag = hypot(moveDirection.dx, moveDirection.dy)
-        if mag > 1 {
-            moveDirection = CGVector(dx: moveDirection.dx/mag, dy: moveDirection.dy/mag)
-        }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        isMoving = false
+        moveDirection = .zero
+        touchStartPosition = nil
     }
 }
