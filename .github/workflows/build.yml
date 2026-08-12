@@ -12,9 +12,12 @@ jobs:
 
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
-       
-      - name: Install XcodeGen
-        run: brew install xcodegen
+
+      - name: Download XcodeGen
+        run: |
+          curl -LO https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
+          unzip xcodegen.zip -d xcodegen_bin
+          sudo cp xcodegen_bin/bin/xcodegen /usr/local/bin/
 
       - name: Generate Xcode project
         run: xcodegen generate
