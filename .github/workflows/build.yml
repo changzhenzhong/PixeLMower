@@ -13,17 +13,30 @@ jobs:
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
 
-      - name: Download XcodeGen
+      - name: Install XcodeGen
         run: |
           curl -LO https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
-          unzip xcodegen.zip -d xcodegen_bin
-          sudo cp xcodegen_bin/bin/xcodegen /usr/local/bin/
+          unzip -o xcodegen.zip
+          chmod +x bin/xcodegen
+          sudo mkdir -p /usr/local/bin
+          sudo cp bin/xcodegen /usr/local/bin/
+          xcodegen --version
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: |
+          echo "=== 文件列表 ==="
+          ls -la
+          echo "--- PixelMower 文件夹内容 ---"
+          ls -la PixelMower
+          echo "--- 生成 Xcode 项目 ---"
+          xcodegen generate
+          echo "--- 检查项目生成结果 ---"
+          ls -la PixelMower.xcodeproj
 
       - name: Build archive (unsigned)
         run: |
+          set -o pipefail
+          echo "=== 开始编译 ==="
           xcodebuild archive \
             -project PixelMower.xcodeproj \
             -scheme PixelMower \
@@ -31,16 +44,27 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log
+          echo "=== 编译结束 ==="
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Create unsigned IPA
+        if: success()
         run: |
           mkdir -p Payload
           cp -R ./build/PixelMower.xcarchive/Products/Applications/PixelMower.app ./Payload/
           zip -r PixelMower-unsigned.ipa Payload
           rm -rf Payload
+          echo "=== IPA 创建成功 ==="
 
       - name: Upload IPA artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: PixelMower-unsigned.ipa
