@@ -263,7 +263,8 @@ class GameScene: SKScene {
         foundationFill.fillColor = UIColor(white: 0.9, alpha: 0.2)
         foundationFill.strokeColor = UIColor(white: 0.5, alpha: 0.6)
         foundationFill.lineWidth = 1
-        foundationFill.lineDashPattern = [4, 4]
+        // 移除 lineDashPattern，因为 SKShapeNode 不支持
+        // 可以使用实线，或者用其他方法绘制虚线，这里用实线
         buildingNode.addChild(foundationFill)
     }
     
