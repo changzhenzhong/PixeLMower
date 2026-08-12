@@ -9,6 +9,8 @@ struct GameView: UIViewRepresentable {
         view.ignoresSiblingOrder = true
         view.showsFPS = false
         view.showsNodeCount = false
+        // 关键：让视图填充整个安全区域
+        view.backgroundColor = .clear
         return view
     }
     func updateUIView(_ uiView: SKView, context: Context) { }
@@ -25,7 +27,7 @@ struct ContentView: View {
             ZStack {
                 if let scene = scene {
                     GameView(scene: scene)
-                        .ignoresSafeArea()
+                        .ignoresSafeArea()  // 关键：忽略安全区域，填满全屏
                         .onAppear {
                             scene.scaleMode = .resizeFill
                         }
@@ -33,9 +35,6 @@ struct ContentView: View {
                     Color.black
                         .ignoresSafeArea()
                         .onAppear {
-                            // 加载存档
-                            gameState.load()
-                            // 创建场景
                             let size = UIScreen.main.bounds.size
                             let newScene = GameScene(size: size)
                             newScene.scaleMode = .resizeFill
@@ -44,8 +43,9 @@ struct ContentView: View {
                         }
                 }
                 
-                // UI 覆盖层（同之前，但返回按钮保留）
+                // UI 覆盖层（与之前相同，略作微调）
                 VStack {
+                    // 顶部栏
                     HStack(alignment: .center, spacing: 8) {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
@@ -102,6 +102,7 @@ struct ContentView: View {
                     
                     Spacer()
                     
+                    // 底部按钮（与之前相同）
                     HStack(spacing: 10) {
                         Button(action: {
                             if gameState.buyWorker() {
