@@ -33,6 +33,9 @@ struct ContentView: View {
                     Color.black
                         .ignoresSafeArea()
                         .onAppear {
+                            // 加载存档
+                            gameState.load()
+                            // 创建场景
                             let size = UIScreen.main.bounds.size
                             let newScene = GameScene(size: size)
                             newScene.scaleMode = .resizeFill
@@ -41,11 +44,9 @@ struct ContentView: View {
                         }
                 }
                 
-                // UI 覆盖层
+                // UI 覆盖层（同之前，但返回按钮保留）
                 VStack {
-                    // 顶部栏：返回按钮 + 建筑信息 + 金币
                     HStack(alignment: .center, spacing: 8) {
-                        // 返回主菜单按钮
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 20, weight: .bold))
@@ -101,7 +102,6 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // 底部按钮行
                     HStack(spacing: 10) {
                         Button(action: {
                             if gameState.buyWorker() {
@@ -188,99 +188,5 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
-    }
-}
-
-// MARK: - GameState（不变）
-class GameState: ObservableObject {
-    @Published var coins: Int = 0
-    @Published var workerCount: Int = 1
-    @Published var speedLevel: Int = 1
-    
-    @Published var currentBuildingIndex: Int = 0
-    @Published var unlockedBuildings: [Bool] = [true, false, false]
-    @Published var currentBuildingName: String = "小屋"
-    @Published var currentBrickCount: Int = 0
-    @Published var totalBrickCount: Int = 100
-    
-    private let buildings: [(name: String, cost: Int, totalBricks: Int, brickSize: CGFloat, layers: Int, perLayer: Int)] = [
-        ("小屋", 0, 100, 10, 10, 10),
-        ("住宅楼", 100, 300, 8, 15, 20),
-        ("摩天大楼", 500, 500, 6, 20, 25)
-    ]
-    
-    var buildingProgress: Double {
-        totalBrickCount > 0 ? Double(currentBrickCount) / Double(totalBrickCount) : 0
-    }
-    
-    var isBuildingComplete: Bool {
-        currentBrickCount >= totalBrickCount
-    }
-    
-    var allBuildingsUnlocked: Bool {
-        unlockedBuildings.allSatisfy { $0 }
-    }
-    
-    var nextBuildingCost: Int {
-        guard let nextIndex = unlockedBuildings.firstIndex(where: { !$0 }) else { return 0 }
-        return buildings[nextIndex].cost
-    }
-    
-    var currentBonus: Int {
-        return currentBuildingIndex + 1
-    }
-    
-    func getCurrentBuildingStyle() -> (totalBricks: Int, brickSize: CGFloat, layers: Int, perLayer: Int) {
-        let data = buildings[currentBuildingIndex]
-        return (data.totalBricks, data.brickSize, data.layers, data.perLayer)
-    }
-    
-    func unlockNextBuilding() -> Bool {
-        guard let index = unlockedBuildings.firstIndex(where: { !$0 }) else { return false }
-        let cost = buildings[index].cost
-        guard coins >= cost else { return false }
-        coins -= cost
-        unlockedBuildings[index] = true
-        currentBuildingIndex = index
-        currentBuildingName = buildings[index].name
-        let style = getCurrentBuildingStyle()
-        totalBrickCount = style.totalBricks
-        currentBrickCount = 0
-        AudioManager.playUnlock()
-        return true
-    }
-    
-    func switchToBuilding(index: Int) {
-        guard index < unlockedBuildings.count && unlockedBuildings[index] else { return }
-        currentBuildingIndex = index
-        currentBuildingName = buildings[index].name
-        let style = getCurrentBuildingStyle()
-        totalBrickCount = style.totalBricks
-        currentBrickCount = 0
-    }
-    
-    func addBrick() {
-        guard currentBrickCount < totalBrickCount else { return }
-        currentBrickCount += 1
-        if isBuildingComplete {
-            AudioManager.playUnlock()
-        }
-    }
-    
-    var workerCost: Int { 10 + workerCount * 5 }
-    var speedCost: Int { 5 + speedLevel * 3 }
-    
-    func buyWorker() -> Bool {
-        guard coins >= workerCost else { return false }
-        coins -= workerCost
-        workerCount += 1
-        return true
-    }
-    
-    func buySpeed() -> Bool {
-        guard coins >= speedCost else { return false }
-        coins -= speedCost
-        speedLevel += 1
-        return true
     }
 }
