@@ -17,7 +17,7 @@ struct GameView: UIViewRepresentable {
 
 struct ContentView: View {
     let onBack: () -> Void
-    @StateObject private var gameState = GameState()  // 直接使用 GameScene 中的 GameState
+    @StateObject private var gameState = GameState()
     @State private var scene: GameScene?
     
     var body: some View {
@@ -42,7 +42,7 @@ struct ContentView: View {
                         }
                 }
                 
-                // UI 覆盖层（与之前相同，略作微调）
+                // UI 覆盖层
                 VStack {
                     HStack(alignment: .center, spacing: 8) {
                         Button(action: onBack) {
@@ -59,7 +59,6 @@ struct ContentView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
                         
                         GeometryReader { proxy in
                             let progress = gameState.buildingProgress
