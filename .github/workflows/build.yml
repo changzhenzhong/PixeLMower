@@ -24,14 +24,24 @@ jobs:
 
       - name: Install XcodeGen
         run: |
+          set -e
           echo "=== 下载 XcodeGen ==="
-          curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
+          curl -fL -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
           echo "=== 下载完成，开始解压 ==="
           unzip -o xcodegen.zip
-          echo "=== 解压完成，设置权限 ==="
-          chmod +x bin/xcodegen
-          sudo cp bin/xcodegen /usr/local/bin/
-          echo "=== XcodeGen 版本 ==="
+          echo "=== 解压后的文件列表 ==="
+          ls -R
+          echo "=== 查找 xcodegen 可执行文件 ==="
+          XCODE_GEN_BIN=$(find . -name xcodegen -type f | head -1)
+          if [ -z "$XCODE_GEN_BIN" ]; then
+            echo "❌ 未找到 xcodegen 可执行文件"
+            exit 1
+          fi
+          echo "找到 xcodegen：$XCODE_GEN_BIN"
+          chmod +x "$XCODE_GEN_BIN"
+          sudo mkdir -p /usr/local/bin
+          sudo cp "$XCODE_GEN_BIN" /usr/local/bin/
+          echo "=== 验证 xcodegen ==="
           xcodegen --version
 
       - name: Generate Xcode project
