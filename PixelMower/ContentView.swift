@@ -9,7 +9,6 @@ struct GameView: UIViewRepresentable {
         view.ignoresSiblingOrder = true
         view.showsFPS = false
         view.showsNodeCount = false
-        // 关键：让视图填充整个安全区域
         view.backgroundColor = .clear
         return view
     }
@@ -18,7 +17,7 @@ struct GameView: UIViewRepresentable {
 
 struct ContentView: View {
     let onBack: () -> Void
-    @StateObject private var gameState = GameState()
+    @StateObject private var gameState = GameState()  // 直接使用 GameScene 中的 GameState
     @State private var scene: GameScene?
     
     var body: some View {
@@ -27,7 +26,7 @@ struct ContentView: View {
             ZStack {
                 if let scene = scene {
                     GameView(scene: scene)
-                        .ignoresSafeArea()  // 关键：忽略安全区域，填满全屏
+                        .ignoresSafeArea()
                         .onAppear {
                             scene.scaleMode = .resizeFill
                         }
@@ -45,7 +44,6 @@ struct ContentView: View {
                 
                 // UI 覆盖层（与之前相同，略作微调）
                 VStack {
-                    // 顶部栏
                     HStack(alignment: .center, spacing: 8) {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
@@ -102,7 +100,6 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // 底部按钮（与之前相同）
                     HStack(spacing: 10) {
                         Button(action: {
                             if gameState.buyWorker() {
