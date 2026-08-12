@@ -1,10 +1,8 @@
 import SwiftUI
 import SpriteKit
 
-// MARK: - SpriteKit 容器
 struct GameView: UIViewRepresentable {
     let scene: GameScene
-
     func makeUIView(context: Context) -> SKView {
         let view = SKView()
         view.presentScene(scene)
@@ -13,92 +11,92 @@ struct GameView: UIViewRepresentable {
         view.showsNodeCount = false
         return view
     }
-
     func updateUIView(_ uiView: SKView, context: Context) { }
 }
 
-// MARK: - 主界面
 struct ContentView: View {
-    @StateObject private var gameState = GameState()   // GameState 定义在 GameScene.swift 中
+    @StateObject private var gameState = GameState()
     @State private var scene: GameScene?
-
+    
     var body: some View {
         ZStack {
-            // 游戏场景
             if let scene = scene {
                 GameView(scene: scene)
                     .ignoresSafeArea()
+                    .onAppear {
+                        scene.scaleMode = .resizeFill
+                    }
             } else {
                 Color.black
                     .ignoresSafeArea()
                     .onAppear {
                         let size = UIScreen.main.bounds.size
                         let newScene = GameScene(size: size)
+                        newScene.scaleMode = .resizeFill
                         newScene.gameState = gameState
                         scene = newScene
                     }
             }
-
-            // UI 覆盖层
+            
             VStack {
                 HStack {
                     Text("💰 \(gameState.coins)")
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(12)
-                        .padding(.top, 40)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.black.opacity(0.5))
+                        .cornerRadius(10)
+                        .padding(.top, 20)
+                        .padding(.leading, 20)
                     Spacer()
                 }
-
+                
                 Spacer()
-
-                HStack(spacing: 16) {
-                    // 升级工人数量
+                
+                HStack(spacing: 20) {
                     Button(action: {
                         if gameState.buyWorker() {
-                            scene?.refreshWorkers()   // 让场景重新生成工人
+                            scene?.refreshWorkers()
                         }
                     }) {
-                        VStack {
-                            Text("👷 升级工人")
-                            Text("\(gameState.workerCount) → \(gameState.workerCount+1)")
-                                .font(.caption)
-                            Text("💰 \(gameState.workerCost)")
-                                .font(.caption2)
+                        VStack(spacing: 2) {
+                            Text("👷 +1")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("💰\(gameState.workerCost)")
+                                .font(.system(size: 12))
                         }
-                        .padding()
-                        .frame(minWidth: 100)
-                        .background(gameState.coins >= gameState.workerCost ? Color.blue : Color.gray)
+                        .padding(8)
+                        .frame(width: 80)
+                        .background(gameState.coins >= gameState.workerCost ? Color.blue.opacity(0.7) : Color.gray.opacity(0.5))
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                     }
                     .disabled(gameState.coins < gameState.workerCost)
-
-                    // 升级移动速度
+                    
                     Button(action: {
                         if gameState.buySpeed() {
-                            scene?.refreshSpeed()     // 让场景更新速度
+                            scene?.refreshSpeed()
                         }
                     }) {
-                        VStack {
-                            Text("⚡ 升级速度")
-                            Text("Lv.\(gameState.speedLevel) → Lv.\(gameState.speedLevel+1)")
-                                .font(.caption)
-                            Text("💰 \(gameState.speedCost)")
-                                .font(.caption2)
+                        VStack(spacing: 2) {
+                            Text("⚡ +1")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("💰\(gameState.speedCost)")
+                                .font(.system(size: 12))
                         }
-                        .padding()
-                        .frame(minWidth: 100)
-                        .background(gameState.coins >= gameState.speedCost ? Color.green : Color.gray)
+                        .padding(8)
+                        .frame(width: 80)
+                        .background(gameState.coins >= gameState.speedCost ? Color.green.opacity(0.7) : Color.gray.opacity(0.5))
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                     }
                     .disabled(gameState.coins < gameState.speedCost)
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 30)
+                .padding(.horizontal, 20)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(15)
             }
         }
         .preferredColorScheme(.dark)
