@@ -1,29 +1,6 @@
 import SpriteKit
 import AVFoundation
 
-class GameState: ObservableObject {
-    @Published var coins: Int = 0
-    @Published var workerCount: Int = 1
-    @Published var speedLevel: Int = 1
-
-    var workerCost: Int { 10 + workerCount * 5 }
-    var speedCost: Int { 5 + speedLevel * 3 }
-
-    func buyWorker() -> Bool {
-        guard coins >= workerCost else { return false }
-        coins -= workerCost
-        workerCount += 1
-        return true
-    }
-
-    func buySpeed() -> Bool {
-        guard coins >= speedCost else { return false }
-        coins -= speedCost
-        speedLevel += 1
-        return true
-    }
-}
-
 class LegoWorker: SKNode {
     private let head: SKShapeNode
     private let torso: SKShapeNode
@@ -31,9 +8,12 @@ class LegoWorker: SKNode {
     private let rightArm: SKShapeNode
     private let leftLeg: SKShapeNode
     private let rightLeg: SKShapeNode
+    private let brickNode: SKShapeNode
     
-    var isCarryingBrick = false
-    var walkCycle: CGFloat = 0
+    var isCarryingBrick = false {
+        didSet { brickNode.isHidden = !isCarryingBrick }
+    }
+    var moveSpeed: CGFloat = 60
     
     override init() {
         head = SKShapeNode(circleOfRadius: 6)
@@ -66,6 +46,13 @@ class LegoWorker: SKNode {
         rightLeg.strokeColor = .black
         rightLeg.lineWidth = 1
         
+        brickNode = SKShapeNode(rectOf: CGSize(width: 6, height: 6), cornerRadius: 1)
+        brickNode.fillColor = .orange
+        brickNode.strokeColor = .black
+        brickNode.lineWidth = 1
+        brickNode.position = CGPoint(x: 8, y: 6)
+        brickNode.isHidden = true
+        
         super.init()
         
         head.position = CGPoint(x: 0, y: 14)
@@ -81,6 +68,7 @@ class LegoWorker: SKNode {
         addChild(rightArm)
         addChild(leftLeg)
         addChild(rightLeg)
+        addChild(brickNode)
         resetArms()
     }
     
@@ -116,138 +104,272 @@ class GameScene: SKScene {
     weak var gameState: GameState!
     
     private var buildingNode: SKNode!
-    private var brickPile: SKSpriteNode!
-    private var dropPoints: [SKSpriteNode] = []
+    private var brickPile: SKNode!
+    private var dropPoints: [SKNode] = []
     private var workers: [LegoWorker] = []
+    private var brickNodes: [SKNode] = []
+    private var nextBrickIndex: Int = 0
     
-    private let buildingSize = CGSize(width: 100, height: 100)
-    private let orbitRadius: CGFloat = 120
-    private let dropRadius: CGFloat = 70
-    private var workerMoveSpeed: CGFloat = 60
+    private var foundationRect: CGRect = .zero
+    private var foundationPoints: [CGPoint] = []
+    
+    private let brickPilePosition = CGPoint(x: 70, y: 70)
+    private let spawnPoint = CGPoint(x: 90, y: 90)
+    private var baseSpeed: CGFloat = 50.0
+    private var currentBuildingIndex: Int = 0
     
     override func didMove(to view: SKView) {
-        backgroundColor = .black
-        setupScene()
-        spawnWorkers(count: gameState.workerCount)
+        backgroundColor = .white
+        setupBackground()
+        setupBrickPile()
+        setupBuilding(at: currentBuildingIndex)
+        setupDropPoints()
+        
+        baseSpeed = 50.0
+        let speedMultiplier = 1.0 + CGFloat(gameState.speedLevel - 1) * 0.2
+        let initialSpeed = baseSpeed * speedMultiplier
+        for _ in 0..<gameState.workerCount {
+            spawnWorker(speed: initialSpeed)
+        }
+        restoreBricks()
     }
     
-    private func setupScene() {
-        // 地面
-        let ground = SKShapeNode(rect: CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.4))
-        ground.fillColor = UIColor(red: 0.2, green: 0.5, blue: 0.2, alpha: 1)
-        ground.strokeColor = .clear
-        ground.position = CGPoint(x: 0, y: 0)
-        addChild(ground)
-        
-        // 天空
+    private func setupBackground() {
         let sky = SKShapeNode(rect: CGRect(x: 0, y: size.height * 0.4, width: size.width, height: size.height * 0.6))
-        sky.fillColor = UIColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1)
+        sky.fillColor = UIColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 1)
         sky.strokeColor = .clear
         sky.position = CGPoint(x: 0, y: size.height * 0.4)
         addChild(sky)
         
-        // 埃菲尔铁塔装饰
-        let tower = SKShapeNode()
-        let path = UIBezierPath()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: -15, y: 40))
-        path.addLine(to: CGPoint(x: -8, y: 40))
-        path.addLine(to: CGPoint(x: -4, y: 70))
-        path.addLine(to: CGPoint(x: 4, y: 70))
-        path.addLine(to: CGPoint(x: 8, y: 40))
-        path.addLine(to: CGPoint(x: 15, y: 40))
-        path.close()
-        tower.path = path.cgPath
-        tower.fillColor = .gray
+        let ground = SKShapeNode(rect: CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.4))
+        ground.fillColor = UIColor(red: 0.2, green: 0.6, blue: 0.2, alpha: 1)
+        ground.strokeColor = .clear
+        ground.position = CGPoint(x: 0, y: 0)
+        addChild(ground)
+        
+        let towerPath = UIBezierPath()
+        towerPath.move(to: CGPoint(x: 0, y: 0))
+        towerPath.addLine(to: CGPoint(x: -20, y: 50))
+        towerPath.addLine(to: CGPoint(x: -12, y: 50))
+        towerPath.addLine(to: CGPoint(x: -6, y: 90))
+        towerPath.addLine(to: CGPoint(x: 6, y: 90))
+        towerPath.addLine(to: CGPoint(x: 12, y: 50))
+        towerPath.addLine(to: CGPoint(x: 20, y: 50))
+        towerPath.close()
+        let tower = SKShapeNode(path: towerPath.cgPath)
+        tower.fillColor = UIColor(white: 0.5, alpha: 0.8)
         tower.strokeColor = .black
-        tower.lineWidth = 2
-        tower.position = CGPoint(x: 100, y: size.height * 0.3)
+        tower.lineWidth = 1
+        tower.position = CGPoint(x: 60, y: size.height * 0.4 + 10)
         addChild(tower)
         
-        // 建筑（中上）
-        buildingNode = SKNode()
-        buildingNode.position = CGPoint(x: size.width / 2, y: size.height * 0.7)
-        addChild(buildingNode)
-        
-        let base = SKShapeNode(rectOf: buildingSize, cornerRadius: 4)
-        base.fillColor = .systemBrown
-        base.strokeColor = .black
-        base.lineWidth = 2
-        buildingNode.addChild(base)
-        
         for i in 0..<3 {
-            for j in 0..<3 {
-                let win = SKShapeNode(rectOf: CGSize(width: 8, height: 10), cornerRadius: 1)
-                win.fillColor = .yellow
-                win.strokeColor = .black
-                win.lineWidth = 1
-                win.position = CGPoint(x: -20 + CGFloat(i)*20, y: -20 + CGFloat(j)*20)
-                buildingNode.addChild(win)
+            let cloud = SKShapeNode(circleOfRadius: 25 + CGFloat(i)*10)
+            cloud.fillColor = UIColor(white: 0.9, alpha: 0.6)
+            cloud.strokeColor = .clear
+            cloud.position = CGPoint(x: size.width * 0.2 + CGFloat(i)*120, y: size.height * 0.75 + CGFloat(i)*20)
+            addChild(cloud)
+        }
+        
+        let sun = SKShapeNode(circleOfRadius: 30)
+        sun.fillColor = .yellow
+        sun.strokeColor = .clear
+        sun.position = CGPoint(x: size.width - 60, y: size.height - 60)
+        addChild(sun)
+    }
+    
+    private func setupBrickPile() {
+        brickPile = SKNode()
+        brickPile.position = brickPilePosition
+        addChild(brickPile)
+        let colors: [UIColor] = [.red, .orange, .brown]
+        for i in 0..<3 {
+            for j in 0..<2 {
+                let brick = SKShapeNode(rectOf: CGSize(width: 20, height: 10), cornerRadius: 1)
+                brick.fillColor = colors[(i+j)%3]
+                brick.strokeColor = .black
+                brick.lineWidth = 1
+                brick.position = CGPoint(x: -15 + CGFloat(i)*15, y: -5 + CGFloat(j)*12)
+                brickPile.addChild(brick)
             }
         }
+        let label = SKLabelNode(text: "🧱")
+        label.fontSize = 20
+        label.position = CGPoint(x: 0, y: -25)
+        brickPile.addChild(label)
+    }
+    
+    private func setupBuilding(at index: Int) {
+        buildingNode?.removeFromParent()
+        brickNodes.removeAll()
+        nextBrickIndex = 0
         
-        let roof = SKShapeNode(path: {
-            let p = UIBezierPath()
-            p.move(to: CGPoint(x: -buildingSize.width/2 - 10, y: buildingSize.height/2))
-            p.addLine(to: CGPoint(x: 0, y: buildingSize.height/2 + 30))
-            p.addLine(to: CGPoint(x: buildingSize.width/2 + 10, y: buildingSize.height/2))
-            p.close()
-            return p.cgPath
-        }())
-        roof.fillColor = .red
-        roof.strokeColor = .black
-        roof.lineWidth = 2
-        buildingNode.addChild(roof)
+        let (totalBricks, brickSize, layers, perLayer) = gameState.getCurrentBuildingStyle()
+        let mainColor = UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1)
+        let windowColor = UIColor.yellow
         
-        // 砖堆（左下）
-        brickPile = SKSpriteNode(color: .systemRed, size: CGSize(width: 30, height: 20))
-        brickPile.position = CGPoint(x: 50, y: 50)
-        addChild(brickPile)
-        for i in 0..<2 {
-            let line = SKShapeNode(rect: CGRect(x: -15, y: -8 + CGFloat(i)*16, width: 30, height: 2))
-            line.fillColor = .black
-            line.strokeColor = .clear
-            brickPile.addChild(line)
+        let totalWidth = CGFloat(perLayer) * brickSize
+        let totalHeight = CGFloat(layers) * brickSize
+        
+        buildingNode = SKNode()
+        buildingNode.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        addChild(buildingNode)
+        
+        var brickPositions: [CGPoint] = []
+        for layer in 0..<layers {
+            for col in 0..<perLayer {
+                let x = -totalWidth/2 + CGFloat(col) * brickSize + brickSize/2
+                let y = -totalHeight/2 + CGFloat(layer) * brickSize + brickSize/2
+                let offset = (layer % 2 == 0) ? 0 : brickSize/2
+                let finalX = x + offset
+                if finalX + brickSize/2 > totalWidth/2 { continue }
+                brickPositions.append(CGPoint(x: finalX, y: y))
+            }
+        }
+        if brickPositions.count > totalBricks {
+            brickPositions = Array(brickPositions[0..<totalBricks])
         }
         
-        // 放置点（围绕建筑）
-        let angles: [CGFloat] = [0, CGFloat.pi/2, CGFloat.pi, 3*CGFloat.pi/2]
-        for angle in angles {
-            let x = size.width / 2 + dropRadius * cos(angle)
-            let y = size.height * 0.7 + dropRadius * sin(angle)
-            let dot = SKSpriteNode(color: .green, size: CGSize(width: 12, height: 12))
-            dot.position = CGPoint(x: x, y: y)
+        for (index, pos) in brickPositions.enumerated() {
+            let layer = index / perLayer
+            let col = index % perLayer
+            let isWindow = (col == perLayer/2 || col == perLayer/2 - 1) && layer > 0 && layer < layers-1
+            let color = isWindow ? windowColor : mainColor
+            
+            let brick = SKShapeNode(rectOf: CGSize(width: brickSize-1, height: brickSize-1), cornerRadius: 1)
+            brick.fillColor = color
+            brick.strokeColor = UIColor(white: 0.2, alpha: 0.5)
+            brick.lineWidth = 0.5
+            brick.position = pos
+            brick.setScale(0)
+            brick.isHidden = true
+            buildingNode.addChild(brick)
+            brickNodes.append(brick)
+        }
+        
+        let foundationW = totalWidth + 40
+        let foundationH = totalHeight + 40
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let origin = CGPoint(x: center.x - foundationW/2, y: center.y - foundationH/2)
+        foundationRect = CGRect(origin: origin, size: CGSize(width: foundationW, height: foundationH))
+        foundationPoints = [
+            CGPoint(x: foundationRect.minX, y: foundationRect.minY),
+            CGPoint(x: foundationRect.maxX, y: foundationRect.minY),
+            CGPoint(x: foundationRect.maxX, y: foundationRect.maxY),
+            CGPoint(x: foundationRect.minX, y: foundationRect.maxY)
+        ]
+        
+        let foundationFill = SKShapeNode(rect: foundationRect, cornerRadius: 4)
+        foundationFill.fillColor = UIColor(white: 0.9, alpha: 0.2)
+        foundationFill.strokeColor = UIColor(white: 0.5, alpha: 0.6)
+        foundationFill.lineWidth = 1
+        foundationFill.lineDashPattern = [4, 4]
+        buildingNode.addChild(foundationFill)
+    }
+    
+    private func setupDropPoints() {
+        dropPoints.forEach { $0.removeFromParent() }
+        dropPoints.removeAll()
+        
+        let offset: CGFloat = 30
+        for point in foundationPoints {
+            let dx = point.x - size.width/2
+            let dy = point.y - size.height/2
+            let dist = hypot(dx, dy)
+            guard dist > 0 else { continue }
+            let ratio = (dist + offset) / dist
+            let pos = CGPoint(
+                x: size.width/2 + dx * ratio,
+                y: size.height/2 + dy * ratio
+            )
+            let dot = SKShapeNode(circleOfRadius: 8)
+            dot.fillColor = .green
+            dot.strokeColor = .black
+            dot.lineWidth = 1
+            dot.position = pos
             addChild(dot)
             dropPoints.append(dot)
         }
     }
     
-    private func spawnWorkers(count: Int) {
-        workers.forEach { $0.removeFromParent() }
-        workers.removeAll()
-        
-        let baseSpeed: CGFloat = 50.0
-        let speedMultiplier = 1.0 + CGFloat(gameState.speedLevel - 1) * 0.2
-        workerMoveSpeed = baseSpeed * speedMultiplier
-        
+    private func restoreBricks() {
+        let count = min(gameState.currentBrickCount, brickNodes.count)
         for i in 0..<count {
-            let angle = (CGFloat(i) / CGFloat(count)) * CGFloat.pi * 2
-            let x = size.width / 2 + orbitRadius * cos(angle)
-            let y = size.height * 0.7 + orbitRadius * sin(angle)
-            let worker = LegoWorker()
-            worker.position = CGPoint(x: x, y: y)
-            worker.setCarrying(Bool.random())
-            addChild(worker)
-            workers.append(worker)
+            let brick = brickNodes[i]
+            brick.isHidden = false
+            brick.setScale(1)
+        }
+        nextBrickIndex = count
+    }
+    
+    func addBrick() {
+        guard nextBrickIndex < brickNodes.count else { return }
+        let brick = brickNodes[nextBrickIndex]
+        brick.isHidden = false
+        brick.setScale(0)
+        // 修正：使用正确的动画方式
+        let scaleAction = SKAction.scale(to: 1, duration: 0.2)
+        scaleAction.timingMode = .easeOut
+        brick.run(scaleAction)
+        AudioManager.playBuild()
+        nextBrickIndex += 1
+        gameState.addBrick()
+    }
+    
+    private func spawnWorker(speed: CGFloat) {
+        let worker = LegoWorker()
+        worker.moveSpeed = speed
+        worker.position = spawnPoint
+        worker.setCarrying(false)
+        addChild(worker)
+        workers.append(worker)
+    }
+    
+    func addOneWorker() {
+        let speedMultiplier = 1.0 + CGFloat(gameState.speedLevel - 1) * 0.2
+        let speed = baseSpeed * speedMultiplier
+        spawnWorker(speed: speed)
+    }
+    
+    func updateSpeed() {
+        let speedMultiplier = 1.0 + CGFloat(gameState.speedLevel - 1) * 0.2
+        let newSpeed = baseSpeed * speedMultiplier
+        for worker in workers {
+            worker.moveSpeed = newSpeed
         }
     }
     
-    func refreshWorkers() {
-        spawnWorkers(count: gameState.workerCount)
+    func switchToBuilding(_ index: Int) {
+        currentBuildingIndex = index
+        setupBuilding(at: index)
+        setupDropPoints()
+        nextBrickIndex = 0
+        restoreBricks()
+        repositionWorkersOnFoundation()
     }
     
-    func refreshSpeed() {
-        spawnWorkers(count: gameState.workerCount)
+    private func repositionWorkersOnFoundation() {
+        let count = workers.count
+        guard count > 0 else { return }
+        for (i, worker) in workers.enumerated() {
+            let t = CGFloat(i) / CGFloat(count)
+            let pointIndex = Int(t * 4) % 4
+            let nextIndex = (pointIndex + 1) % 4
+            let localT = (t * 4).truncatingRemainder(dividingBy: 1)
+            let p1 = foundationPoints[pointIndex]
+            let p2 = foundationPoints[nextIndex]
+            let x = p1.x + (p2.x - p1.x) * localT
+            let y = p1.y + (p2.y - p1.y) * localT
+            let dx = x - size.width/2
+            let dy = y - size.height/2
+            let dist = hypot(dx, dy)
+            let offset: CGFloat = 20
+            let ratio = (dist + offset) / dist
+            worker.position = CGPoint(
+                x: size.width/2 + dx * ratio,
+                y: size.height/2 + dy * ratio
+            )
+        }
     }
     
     private var lastUpdate: TimeInterval = 0
@@ -261,32 +383,27 @@ class GameScene: SKScene {
     }
     
     private func moveWorker(_ worker: LegoWorker, deltaTime: CGFloat) {
+        let brickTarget = brickPilePosition
+        let dropTarget = nearestDropPoint(from: worker.position)
         let target: CGPoint
         if worker.isCarryingBrick {
-            var nearest = dropPoints[0]
-            var minDist = CGFloat.greatestFiniteMagnitude
-            for point in dropPoints {
-                let dist = hypot(point.position.x - worker.position.x, point.position.y - worker.position.y)
-                if dist < minDist {
-                    minDist = dist
-                    nearest = point
-                }
-            }
-            target = nearest.position
+            target = dropTarget
         } else {
-            target = brickPile.position
+            target = brickTarget
         }
         
         let dx = target.x - worker.position.x
         let dy = target.y - worker.position.y
         let distance = hypot(dx, dy)
         
-        if distance < 1 {
+        if distance < 3 {
             worker.position = target
             if worker.isCarryingBrick {
                 worker.setCarrying(false)
-                gameState.coins += 1
+                let bonus = gameState?.currentBonus ?? 1
+                gameState.coins += bonus
                 AudioManager.playCoin()
+                addBrick()
                 if let dot = dropPoints.first(where: { $0.position == target }) {
                     let flash = SKAction.sequence([
                         SKAction.colorize(with: .white, colorBlendFactor: 1, duration: 0.1),
@@ -299,11 +416,24 @@ class GameScene: SKScene {
                 AudioManager.playPickup()
             }
         } else {
-            let step = workerMoveSpeed * deltaTime
+            let step = worker.moveSpeed * deltaTime
             let ratio = min(step / distance, 1.0)
             worker.position.x += dx * ratio
             worker.position.y += dy * ratio
             worker.animateWalk(progress: CGFloat(CFAbsoluteTimeGetCurrent()) * 2)
         }
+    }
+    
+    private func nearestDropPoint(from pos: CGPoint) -> CGPoint {
+        var nearest = dropPoints[0]
+        var minDist = CGFloat.greatestFiniteMagnitude
+        for point in dropPoints {
+            let dist = hypot(pos.x - point.position.x, pos.y - point.position.y)
+            if dist < minDist {
+                minDist = dist
+                nearest = point
+            }
+        }
+        return nearest.position
     }
 }
