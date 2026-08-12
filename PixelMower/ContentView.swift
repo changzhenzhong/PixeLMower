@@ -1,139 +1,136 @@
 import SwiftUI
 import SpriteKit
-import UIKit
 
+// MARK: - 游戏状态（可观察，自动刷新 UI）
+class GameState: ObservableObject {
+    @Published var coins: Int = 0
+    @Published var workerCount: Int = 1
+    @Published var speedLevel: Int = 1
+
+    // 升级成本（可根据需要调整公式）
+    var workerCost: Int { 10 + workerCount * 5 }
+    var speedCost: Int { 5 + speedLevel * 3 }
+
+    /// 购买一名新工人
+    func buyWorker() -> Bool {
+        guard coins >= workerCost else { return false }
+        coins -= workerCost
+        workerCount += 1
+        return true
+    }
+
+    /// 升级移动速度
+    func buySpeed() -> Bool {
+        guard coins >= speedCost else { return false }
+        coins -= speedCost
+        speedLevel += 1
+        return true
+    }
+}
+
+// MARK: - SpriteKit 容器
+struct GameView: UIViewRepresentable {
+    let scene: GameScene
+
+    func makeUIView(context: Context) -> SKView {
+        let view = SKView()
+        view.presentScene(scene)
+        view.ignoresSiblingOrder = true
+        view.showsFPS = false
+        view.showsNodeCount = false
+        return view
+    }
+
+    func updateUIView(_ uiView: SKView, context: Context) {
+        // 无需更新
+    }
+}
+
+// MARK: - 主界面
 struct ContentView: View {
     @StateObject private var gameState = GameState()
-    @State private var showUpgradePanel = false
-    @State private var upgradeOptions: [UpgradeOption] = []
-    @State private var gameScene: GameScene?
+    @State private var scene: GameScene?
 
     var body: some View {
         ZStack {
-            if let gameScene = gameScene {
-                SpriteView(scene: gameScene)
+            // 游戏场景
+            if let scene = scene {
+                GameView(scene: scene)
                     .ignoresSafeArea()
-                    .onAppear {
-                        setupGameCallbacks()
-                    }
             } else {
                 Color.black
                     .ignoresSafeArea()
                     .onAppear {
-                        let scene = createScene()
-                        gameScene = scene
+                        let size = UIScreen.main.bounds.size
+                        let newScene = GameScene(size: size)
+                        newScene.gameState = gameState   // 注入状态
+                        scene = newScene
                     }
             }
 
-            // HUD 覆盖层
+            // UI 覆盖层
             VStack {
                 HStack {
-                    // 等级和经验条
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lv.\(gameState.level)")
-                            .font(.system(size: 20, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(Color.white.opacity(0.2))
-                                    .frame(height: 6).cornerRadius(3)
-                                Rectangle().fill(Color.green)
-                                    .frame(width: geo.size.width * CGFloat(gameState.expProgress), height: 6)
-                                    .cornerRadius(3)
-                                    .animation(.easeOut(duration: 0.3), value: gameState.expProgress)
-                            }
-                        }
-                        .frame(height: 6)
-                    }
-                    .frame(width: 120)
-
+                    Text("💰 \(gameState.coins)")
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(12)
+                        .padding(.top, 40)
                     Spacer()
-
-                    // 血量显示
-                    Text("❤️ \(Int(gameState.playerHP))")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(.red)
-
-                    // 击杀数
-                    Text("⚔️\(gameState.killCount)")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(.orange)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
 
                 Spacer()
-            }
 
-            // 升级面板
-            if showUpgradePanel {
-                upgradePanelView
-                    .onAppear {
-                        gameScene?.pauseGame()
-                    }
-            }
-        }
-    }
-
-    private func createScene() -> GameScene {
-        let scene = GameScene(size: UIScreen.main.bounds.size)
-        scene.scaleMode = .resizeFill
-        scene.gameState = gameState
-        return scene
-    }
-
-    private func setupGameCallbacks() {
-        gameState.onLevelUp = { options in
-            upgradeOptions = options
-            withAnimation(.spring()) { showUpgradePanel = true }
-        }
-        gameState.onPlayerDeath = {
-            // 死亡处理：简单重启
-            gameState.reset()
-            gameScene?.removeAllChildren()
-            gameScene?.didMove(to: gameScene!.view!)
-        }
-    }
-
-    private var upgradePanelView: some View {
-        VStack(spacing: 12) {
-            Text("⬆️ 升级！选择强化")
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .foregroundColor(.yellow)
-            ForEach(upgradeOptions) { option in
-                Button(action: {
-                    gameState.applyUpgrade(option)
-                    withAnimation(.spring()) { showUpgradePanel = false }
-                    gameScene?.resumeGame()
-                }) {
-                    HStack {
-                        Text(option.icon).font(.title2)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(option.name)
-                                .font(.system(size: 15, weight: .bold, design: .monospaced))
-                            Text(option.description)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.gray)
+                HStack(spacing: 16) {
+                    // 升级工人按钮
+                    Button(action: {
+                        if gameState.buyWorker() {
+                            // 若场景需要即时刷新，可调用相应方法（以下为预留）
+                            // scene?.refreshWorkers()
                         }
-                        Spacer()
-                        Text("Lv.\(option.currentLevel+1)")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.green)
+                    }) {
+                        VStack {
+                            Text("👷 升级工人")
+                            Text("\(gameState.workerCount) → \(gameState.workerCount+1)")
+                                .font(.caption)
+                            Text("💰 \(gameState.workerCost)")
+                                .font(.caption2)
+                        }
+                        .padding()
+                        .frame(minWidth: 100)
+                        .background(gameState.coins >= gameState.workerCost ? Color.blue : Color.gray)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                     }
-                    .padding(12)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.yellow.opacity(0.5), lineWidth: 1))
+                    .disabled(gameState.coins < gameState.workerCost)
+
+                    // 升级速度按钮
+                    Button(action: {
+                        if gameState.buySpeed() {
+                            // scene?.refreshSpeed()
+                        }
+                    }) {
+                        VStack {
+                            Text("⚡ 升级速度")
+                            Text("Lv.\(gameState.speedLevel) → Lv.\(gameState.speedLevel+1)")
+                                .font(.caption)
+                            Text("💰 \(gameState.speedCost)")
+                                .font(.caption2)
+                        }
+                        .padding()
+                        .frame(minWidth: 100)
+                        .background(gameState.coins >= gameState.speedCost ? Color.green : Color.gray)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(gameState.coins < gameState.speedCost)
                 }
+                .padding(.bottom, 40)
             }
         }
-        .padding(20)
-        .background(Color(red: 0.05, green: 0.05, blue: 0.12).opacity(0.95))
-        .cornerRadius(16)
-        .overlay(RoundedRectangle(cornerRadius: 16)
-            .stroke(Color.yellow, lineWidth: 2))
-        .padding(.horizontal, 30)
-        .shadow(radius: 20)
+        .preferredColorScheme(.dark) // 强制深色，更配像素风
     }
 }
