@@ -1,40 +1,25 @@
 import SwiftUI
 
+// 解决竖屏锁定，替代UIApplication.shared报错
+struct OrientationLock: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        vc.view.backgroundColor = .clear
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        // 强制竖屏
+        uiViewController.setNeedsUpdateOfSupportedInterfaceOrientations()
+    }
+}
+
 @main
 struct PixelMowerApp: App {
-    @State private var isGameActive = false
-    @State private var showSettings = false
-    @State private var showAbout = false
-    
     var body: some Scene {
         WindowGroup {
-            if isGameActive {
-                ContentView(onBack: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isGameActive = false
-                    }
-                })
-                .transition(.opacity)
-            } else {
-                MenuView(
-                    onStart: {
-                        withAnimation(.easeIn(duration: 0.3)) {
-                            isGameActive = true
-                        }
-                    },
-                    onSettings: {
-                        showSettings = true
-                    },
-                    onAbout: {
-                        showAbout = true
-                    }
-                )
-                .sheet(isPresented: $showSettings) {
-                    SettingsView()
-                }
-                .sheet(isPresented: $showAbout) {
-                    AboutView()
-                }
+            ZStack {
+                ContentView()
+                OrientationLock()
             }
         }
     }
