@@ -1,6 +1,7 @@
 import SpriteKit
 import AVFoundation
 
+// MARK: - GameState（与之前相同）
 class GameState: ObservableObject {
     @Published var coins: Int = 0
     @Published var workerCount: Int = 1
@@ -73,26 +74,24 @@ class GameState: ObservableObject {
     }
 }
 
+// MARK: - 乐高工人
 class LegoWorker: SKNode {
     var moveSpeed: CGFloat = 60
     var isCarryingBrick = false
     
     override init() {
         super.init()
-        // 身体
         let body = SKShapeNode(circleOfRadius: 8)
         body.fillColor = .blue
         body.strokeColor = .black
         body.lineWidth = 1
         addChild(body)
-        // 头
         let head = SKShapeNode(circleOfRadius: 5)
         head.fillColor = .white
         head.strokeColor = .black
         head.lineWidth = 1
         head.position = CGPoint(x: 0, y: 10)
         addChild(head)
-        // 砖块
         let brick = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
         brick.fillColor = .orange
         brick.strokeColor = .black
@@ -113,6 +112,7 @@ class LegoWorker: SKNode {
     }
 }
 
+// MARK: - 游戏场景（含美观建筑）
 class GameScene: SKScene {
     weak var gameState: GameState!
     
@@ -121,10 +121,16 @@ class GameScene: SKScene {
     private var dropPoint: SKShapeNode!
     private var workers: [LegoWorker] = []
     private var brickCount: Int = 0
-    private var buildingBricks: [SKNode] = []
+    private var placedBricks: [SKShapeNode] = []
+    
+    // 建筑尺寸
+    private let buildingWidth: CGFloat = 80
+    private let buildingHeight: CGFloat = 90
+    private let brickSize: CGFloat = 8
+    private let bricksPerRow: Int = 8
     
     private let brickPilePos: CGPoint
-    private let dropRadius: CGFloat = 120
+    private let dropRadius: CGFloat = 130
     
     override init(size: CGSize) {
         self.brickPilePos = CGPoint(x: 60, y: 60)
@@ -136,7 +142,6 @@ class GameScene: SKScene {
     }
     
     override func didMove(to view: SKView) {
-        // 背景色
         backgroundColor = UIColor(red: 0.3, green: 0.6, blue: 0.9, alpha: 1)
         scaleMode = .resizeFill
         
@@ -148,12 +153,16 @@ class GameScene: SKScene {
         for _ in 0..<gameState.workerCount {
             spawnWorker()
         }
-        restoreBuilding()
+        
+        // 恢复已放置的砖块
+        restoreBricks()
     }
     
+    // MARK: - 背景（包含埃菲尔铁塔和故宫亭子）
     private func drawBackground() {
         // 草地
-        let grass = SKShapeNode(rect: CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.35))
+        let grassHeight = size.height * 0.35
+        let grass = SKShapeNode(rect: CGRect(x: 0, y: 0, width: size.width, height: grassHeight))
         grass.fillColor = UIColor(red: 0.2, green: 0.55, blue: 0.2, alpha: 1)
         grass.strokeColor = .clear
         grass.position = .zero
@@ -164,7 +173,7 @@ class GameScene: SKScene {
             let cloud = SKShapeNode(circleOfRadius: 30 + CGFloat(i)*15)
             cloud.fillColor = UIColor(white: 0.95, alpha: 0.7)
             cloud.strokeColor = .clear
-            cloud.position = CGPoint(x: size.width * 0.15 + CGFloat(i) * size.width * 0.35, y: size.height * 0.75 + CGFloat(i%2)*20)
+            cloud.position = CGPoint(x: size.width * 0.15 + CGFloat(i) * size.width * 0.35, y: size.height * 0.8 + CGFloat(i%2)*20)
             addChild(cloud)
             let cloud2 = SKShapeNode(circleOfRadius: 20 + CGFloat(i)*10)
             cloud2.fillColor = UIColor(white: 0.95, alpha: 0.6)
@@ -194,7 +203,7 @@ class GameScene: SKScene {
         tower.fillColor = UIColor(white: 0.4, alpha: 0.6)
         tower.strokeColor = UIColor.black
         tower.lineWidth = 1
-        tower.position = CGPoint(x: 50, y: size.height * 0.35)
+        tower.position = CGPoint(x: 50, y: grassHeight + 10)
         addChild(tower)
         
         // 故宫亭子（右侧）
@@ -202,7 +211,7 @@ class GameScene: SKScene {
         pavilionBase.fillColor = UIColor(red: 0.7, green: 0.2, blue: 0.2, alpha: 0.7)
         pavilionBase.strokeColor = .black
         pavilionBase.lineWidth = 1
-        pavilionBase.position = CGPoint(x: size.width - 55, y: size.height * 0.35 + 10)
+        pavilionBase.position = CGPoint(x: size.width - 55, y: grassHeight + 10)
         addChild(pavilionBase)
         let roofPath = UIBezierPath()
         roofPath.move(to: CGPoint(x: -22, y: 12))
@@ -217,6 +226,7 @@ class GameScene: SKScene {
         addChild(pavilionRoof)
     }
     
+    // MARK: - 砖堆
     private func setupBrickPile() {
         brickPile = SKNode()
         brickPile.position = brickPilePos
@@ -232,23 +242,24 @@ class GameScene: SKScene {
         brickPile.addChild(label)
     }
     
+    // MARK: - 建筑（美观版）
     private func setupBuilding() {
         buildingNode = SKNode()
-        buildingNode.position = CGPoint(x: size.width/2, y: size.height/2)
+        buildingNode.position = CGPoint(x: size.width/2, y: size.height/2 + 10)
         addChild(buildingNode)
         
-        // 建筑主体（带屋顶）
-        let main = SKShapeNode(rectOf: CGSize(width: 70, height: 70), cornerRadius: 3)
-        main.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1)
-        main.strokeColor = .black
-        main.lineWidth = 2
-        buildingNode.addChild(main)
+        // 1. 建筑主体（棕色）
+        let mainBody = SKShapeNode(rectOf: CGSize(width: buildingWidth, height: buildingHeight), cornerRadius: 4)
+        mainBody.fillColor = UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1)
+        mainBody.strokeColor = .black
+        mainBody.lineWidth = 2
+        buildingNode.addChild(mainBody)
         
-        // 屋顶
+        // 2. 屋顶（红色三角形）
         let roofPath = UIBezierPath()
-        roofPath.move(to: CGPoint(x: -40, y: 35))
-        roofPath.addLine(to: CGPoint(x: 0, y: 55))
-        roofPath.addLine(to: CGPoint(x: 40, y: 35))
+        roofPath.move(to: CGPoint(x: -buildingWidth/2 - 5, y: buildingHeight/2))
+        roofPath.addLine(to: CGPoint(x: 0, y: buildingHeight/2 + 35))
+        roofPath.addLine(to: CGPoint(x: buildingWidth/2 + 5, y: buildingHeight/2))
         roofPath.close()
         let roof = SKShapeNode(path: roofPath.cgPath)
         roof.fillColor = .red
@@ -256,19 +267,50 @@ class GameScene: SKScene {
         roof.lineWidth = 2
         buildingNode.addChild(roof)
         
-        // 窗户（装饰）
-        for i in 0..<2 {
-            for j in 0..<2 {
-                let win = SKShapeNode(rectOf: CGSize(width: 10, height: 12), cornerRadius: 1)
-                win.fillColor = UIColor(red: 0.8, green: 0.8, blue: 0.3, alpha: 1)
-                win.strokeColor = .black
-                win.lineWidth = 1
-                win.position = CGPoint(x: -15 + CGFloat(i)*30, y: -15 + CGFloat(j)*30)
-                buildingNode.addChild(win)
-            }
+        // 3. 装饰窗户（初始显示几个，增加美观）
+        let windowPositions: [(CGFloat, CGFloat)] = [
+            (-20, 20), (20, 20),
+            (-20, -5), (20, -5),
+            (-20, -30), (20, -30)
+        ]
+        for (x, y) in windowPositions {
+            let win = SKShapeNode(rectOf: CGSize(width: 12, height: 14), cornerRadius: 1)
+            win.fillColor = UIColor(red: 0.8, green: 0.8, blue: 0.3, alpha: 1)
+            win.strokeColor = .black
+            win.lineWidth = 1
+            win.position = CGPoint(x: x, y: y)
+            buildingNode.addChild(win)
+            // 窗户十字框
+            let hLine = SKShapeNode(rect: CGRect(x: -6, y: -1, width: 12, height: 2))
+            hLine.fillColor = .black
+            hLine.strokeColor = .clear
+            hLine.position = .zero
+            win.addChild(hLine)
+            let vLine = SKShapeNode(rect: CGRect(x: -1, y: -7, width: 2, height: 14))
+            vLine.fillColor = .black
+            vLine.strokeColor = .clear
+            vLine.position = .zero
+            win.addChild(vLine)
         }
+        
+        // 4. 门（底部中央）
+        let door = SKShapeNode(rectOf: CGSize(width: 16, height: 20), cornerRadius: 2)
+        door.fillColor = UIColor(red: 0.3, green: 0.2, blue: 0.1, alpha: 1)
+        door.strokeColor = .black
+        door.lineWidth = 1
+        door.position = CGPoint(x: 0, y: -buildingHeight/2 + 10)
+        buildingNode.addChild(door)
+        
+        // 5. 门把手
+        let handle = SKShapeNode(circleOfRadius: 2)
+        handle.fillColor = .yellow
+        handle.strokeColor = .black
+        handle.lineWidth = 0.5
+        handle.position = CGPoint(x: 5, y: -buildingHeight/2 + 10)
+        buildingNode.addChild(handle)
     }
     
+    // MARK: - 放置点
     private func setupDropPoint() {
         dropPoint = SKShapeNode(circleOfRadius: 12)
         dropPoint.fillColor = .green
@@ -276,25 +318,46 @@ class GameScene: SKScene {
         dropPoint.lineWidth = 1
         dropPoint.position = CGPoint(x: size.width/2, y: size.height/2 + dropRadius)
         addChild(dropPoint)
+        
+        // 添加"放置点"文字
+        let label = SKLabelNode(text: "📦")
+        label.fontSize = 16
+        label.position = CGPoint(x: 0, y: -20)
+        dropPoint.addChild(label)
     }
     
-    private func restoreBuilding() {
+    // MARK: - 恢复已放置的砖块
+    private func restoreBricks() {
         let count = gameState.currentBrickCount
-        let maxPerRow = 8
         for i in 0..<count {
-            let brick = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
-            brick.fillColor = .orange
-            brick.strokeColor = .black
-            brick.lineWidth = 0.5
-            let row = i / maxPerRow
-            let col = i % maxPerRow
-            brick.position = CGPoint(x: -28 + CGFloat(col) * 8, y: -28 + CGFloat(row) * 8)
+            let brick = createBrick(at: i)
             buildingNode.addChild(brick)
-            buildingBricks.append(brick)
+            placedBricks.append(brick)
         }
         brickCount = count
     }
     
+    // 创建一块砖
+    private func createBrick(at index: Int) -> SKShapeNode {
+        let brick = SKShapeNode(rectOf: CGSize(width: brickSize-1, height: brickSize-1))
+        brick.fillColor = UIColor(red: 0.8, green: 0.5, blue: 0.2, alpha: 1)
+        brick.strokeColor = .black
+        brick.lineWidth = 0.5
+        
+        // 计算位置（从底部开始，逐层向上）
+        let row = index / bricksPerRow
+        let col = index % bricksPerRow
+        // 交错排列（砌墙效果）
+        let offset = (row % 2 == 0) ? 0 : brickSize/2
+        let totalWidth = CGFloat(bricksPerRow) * brickSize
+        let x = -totalWidth/2 + CGFloat(col) * brickSize + brickSize/2 + offset
+        let y = -buildingHeight/2 + 10 + CGFloat(row) * brickSize + brickSize/2
+        
+        brick.position = CGPoint(x: x, y: y)
+        return brick
+    }
+    
+    // 生成工人
     private func spawnWorker() {
         let worker = LegoWorker()
         worker.moveSpeed = 50 + CGFloat(gameState.speedLevel - 1) * 10
@@ -304,6 +367,7 @@ class GameScene: SKScene {
         workers.append(worker)
     }
     
+    // MARK: - 对外接口
     func addOneWorker() {
         spawnWorker()
     }
@@ -316,11 +380,23 @@ class GameScene: SKScene {
     
     func switchToBuilding(_ index: Int) {
         gameState.switchToBuilding(index: index)
-        buildingBricks.forEach { $0.removeFromParent() }
-        buildingBricks.removeAll()
+        // 清除旧砖块
+        placedBricks.forEach { $0.removeFromParent() }
+        placedBricks.removeAll()
         brickCount = 0
+        // 更新建筑外观（根据类型变化颜色）
+        let colors: [UIColor] = [
+            UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1),
+            UIColor(red: 0.8, green: 0.7, blue: 0.5, alpha: 1),
+            UIColor(red: 0.3, green: 0.5, blue: 0.7, alpha: 1)
+        ]
+        // 更新主体颜色
+        if let mainBody = buildingNode.children.first(where: { $0 is SKShapeNode && $0.position == .zero }) as? SKShapeNode {
+            mainBody.fillColor = colors[index % colors.count]
+        }
     }
     
+    // MARK: - 更新循环
     private var lastUpdate: TimeInterval = 0
     override func update(_ currentTime: TimeInterval) {
         let delta = min(currentTime - lastUpdate, 1/30)
@@ -356,20 +432,17 @@ class GameScene: SKScene {
     }
     
     private func addBrickToBuilding() {
-        let brick = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
-        brick.fillColor = .orange
-        brick.strokeColor = .black
-        brick.lineWidth = 0.5
-        let maxPerRow = 8
-        let row = brickCount / maxPerRow
-        let col = brickCount % maxPerRow
-        brick.position = CGPoint(x: -28 + CGFloat(col) * 8, y: -28 + CGFloat(row) * 8)
+        guard brickCount < gameState.totalBrickCount else { return }
+        let brick = createBrick(at: brickCount)
         buildingNode.addChild(brick)
-        buildingBricks.append(brick)
+        placedBricks.append(brick)
         brickCount += 1
         gameState.addBrick()
-        if gameState.isBuildingComplete {
-            AudioManager.playUnlock()
-        }
+        
+        // 小动画：砖块出现时弹跳
+        brick.setScale(0)
+        let scaleUp = SKAction.scale(to: 1.2, duration: 0.1)
+        let scaleDown = SKAction.scale(to: 1.0, duration: 0.1)
+        brick.run(SKAction.sequence([scaleUp, scaleDown]))
     }
 }
