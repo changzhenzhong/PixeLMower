@@ -7,11 +7,9 @@ struct MenuView: View {
     
     var body: some View {
         ZStack {
-            // 像素风格背景
             LinearGradient(gradient: Gradient(colors: [Color(red: 0.2, green: 0.4, blue: 0.6), Color(red: 0.1, green: 0.2, blue: 0.3)]), startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
             
-            // 装饰砖墙（模拟）
             VStack(spacing: 0) {
                 ForEach(0..<30) { row in
                     HStack(spacing: 0) {
