@@ -11,7 +11,7 @@ targets:
     type: application
     platform: iOS
     sources:
-      - PixelMower
+      - path: PixelMower
     info:
       UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
       UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait]
