@@ -15,7 +15,6 @@ struct PixelMowerApp: App {
                     }
                 })
                 .transition(.opacity)
-                .supportedOrientations(.portrait) // 强制竖屏
             } else {
                 MenuView(
                     onStart: {
@@ -36,41 +35,7 @@ struct PixelMowerApp: App {
                 .sheet(isPresented: $showAbout) {
                     AboutView()
                 }
-                .supportedOrientations(.portrait)
             }
         }
-    }
-}
-
-extension View {
-    func supportedOrientations(_ orientations: UIInterfaceOrientationMask) -> some View {
-        self.onAppear {
-            UIApplication.shared.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
-        .background(SupportedOrientationsView(orientations: orientations))
-    }
-}
-
-struct SupportedOrientationsView: UIViewControllerRepresentable {
-    let orientations: UIInterfaceOrientationMask
-    
-    func makeUIViewController(context: Context) -> UIViewController {
-        let controller = OrientationViewController()
-        controller.orientations = orientations
-        return controller
-    }
-    
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
-}
-
-class OrientationViewController: UIViewController {
-    var orientations: UIInterfaceOrientationMask = .portrait
-    
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        return orientations
-    }
-    
-    override var shouldAutorotate: Bool {
-        return false
     }
 }
