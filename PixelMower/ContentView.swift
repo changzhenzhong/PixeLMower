@@ -8,10 +8,13 @@ struct ContentView: View {
     @State private var progress: Double = 0.0
     @State private var goMenu = false
     
-    private func makeGameScene() -> GameScene {
+    // 持有scene引用，保证UI回调、按钮可以调用游戏逻辑
+    private var gameScene: GameScene
+    
+    init() {
         let scene = GameScene()
         scene.audioManager = AudioManager.shared
-        return scene
+        _gameScene = State(initialValue: scene)
     }
     
     var body: some View {
@@ -19,11 +22,10 @@ struct ContentView: View {
             MenuView()
         } else {
             ZStack {
-                SpriteView(scene: makeGameScene())
+                SpriteView(scene: gameScene)
                     .ignoresSafeArea()
                     .onAppear {
-                        let scene = makeGameScene()
-                        scene.onUpdateUI = { g,b,p in
+                        gameScene.onUpdateUI = { g,b,p in
                             gold = g
                             brickCount = b
                             progress = p
@@ -37,7 +39,7 @@ struct ContentView: View {
                                 .font(.system(size:40))
                                 .foregroundColor(.white)
                         }
-                        Text("小屋").font(.title).bold().foregroundColor(.white)
+                        Text(gameScene.buildingName).font(.title).bold().foregroundColor(.white)
                         ProgressView(value: progress)
                             .frame(maxWidth: .infinity)
                         Text("\(Int(progress*100))%").foregroundColor(.white)
@@ -53,7 +55,7 @@ struct ContentView: View {
                     
                     HStack(spacing:16) {
                         Button(action:{
-                            // 注意：这里临时注释，下一轮修复按钮调用scene逻辑，当前先保证编译通过
+                            gameScene.addWorker()
                         }) {
                             HStack {
                                 Image(systemName:"person.2.fill")
@@ -62,7 +64,7 @@ struct ContentView: View {
                         }
                         
                         Button(action:{
-                            
+                            gameScene.boostWorkerSpeed()
                         }) {
                             HStack {
                                 Image(systemName:"bolt.fill")
