@@ -42,9 +42,7 @@ struct ContentView: View {
                         }
                 }
                 
-                // UI 覆盖层（顶部和底部，半透明背景）
                 VStack {
-                    // 顶部栏
                     HStack(alignment: .center, spacing: 8) {
                         Button(action: onBack) {
                             Image(systemName: "chevron.left")
@@ -98,7 +96,6 @@ struct ContentView: View {
                     
                     Spacer()
                     
-                    // 底部按钮
                     HStack(spacing: 10) {
                         Button(action: {
                             if gameState.buyWorker() {
