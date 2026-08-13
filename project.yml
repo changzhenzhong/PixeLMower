@@ -14,3 +14,8 @@ targets:
         EXECUTABLE_NAME: PixelMower
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "5.0"
+targets:
+  PixelMower:
+    info:
+      UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+      UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait]
