@@ -1,21 +1,22 @@
 name: PixelMower
 options:
   bundleIdPrefix: com.pixelmower
+  deploymentTarget:
+    iOS: "16.0"
+  platforms:
+    iOS: {}
+
 targets:
   PixelMower:
     type: application
     platform: iOS
     sources:
       - PixelMower
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.pixelmower.game
-        PRODUCT_NAME: PixelMower
-        EXECUTABLE_NAME: PixelMower
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
-targets:
-  PixelMower:
     info:
       UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
       UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait]
+      CFBundleDisplayName: "搬砖大亨"
+    settings:
+      base:
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 1
